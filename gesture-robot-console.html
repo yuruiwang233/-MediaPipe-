@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>二轴手势机器人控制台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='10' y='14' width='44' height='40' rx='10' fill='%23232d3d' stroke='%23ff725c' stroke-width='3'/%3E%3Ccircle cx='24' cy='32' r='4' fill='%23ff725c'/%3E%3Ccircle cx='40' cy='32' r='4' fill='%23ff725c'/%3E%3Cpath d='M24 42 Q32 48 40 42' fill='none' stroke='%23ff725c' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#1a2230;
+    --panel:#232d3d;
+    --panel-2:#2a3548;
+    --border:#35425a;
+    --text:#e7ecf3;
+    --muted:#9aa7bd;
+    --accent:#ff725c;
+    --accent-dim:rgba(255,114,92,.14);
+    --ok:#36c98e;
+    --warn:#f2b134;
+    --idle:#5a6b86;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+    --sans:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.55;
+    min-height:100vh;
+    padding:22px 18px 40px;
+  }
+  .wrap{max-width:1080px;margin:0 auto;}
+  header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px;}
+  h1{font-size:21px;margin:0;font-weight:700;letter-spacing:.5px;}
+  h1 small{display:block;font-size:12.5px;font-weight:400;color:var(--muted);margin-top:3px;letter-spacing:0;}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-size:13px;padding:7px 13px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--muted);}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--idle);flex:none;}
+  .pill.ok{color:var(--ok);border-color:rgba(54,201,142,.4);}
+  .pill.ok .dot{background:var(--ok);box-shadow:0 0 0 3px rgba(54,201,142,.18);}
+  .pill.warn .dot{background:var(--warn);}
+
+  .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;}
+  @media (max-width:860px){.grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:15px;}
+  .video-wrap{position:relative;width:100%;aspect-ratio:4/3;border-radius:10px;overflow:hidden;background:#0d121b;border:1px solid var(--border);}
+  #video,#overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+  #overlay{pointer-events:none;}
+  .hud{position:absolute;top:10px;left:10px;background:rgba(13,18,27,.72);color:var(--text);font-size:13px;padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.08);}
+  .hud .g{color:var(--accent);font-weight:700;}
+
+  .btn-row{display:flex;gap:10px;margin-top:13px;flex-wrap:wrap;}
+  button{
+    font-family:var(--sans);font-size:14px;cursor:pointer;
+    padding:10px 16px;border-radius:9px;border:1px solid var(--border);
+    background:var(--panel-2);color:var(--text);flex:1;min-width:150px;
+    transition:border-color .15s,background .15s;
+  }
+  button:hover{border-color:#56688a;}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#231008;font-weight:600;}
+  button.primary:hover{background:#ff8470;}
+  button.primary.connected{background:var(--ok);border-color:var(--ok);color:#06281d;}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13.5px;margin-bottom:9px;}
+  .row .k{color:var(--muted);}
+  .row .v{font-family:var(--mono);font-size:13px;}
+  .row .v.ok{color:var(--ok);} .row .v.warn{color:var(--warn);} .row .v.muted{color:var(--muted);}
+
+  .gauge{margin:12px 0 14px;}
+  .gauge .lab{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-bottom:5px;}
+  .gauge .lab b{color:var(--text);font-family:var(--mono);font-weight:600;}
+  .track{position:relative;height:10px;background:var(--panel-2);border-radius:6px;border:1px solid var(--border);}
+  .track .tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:rgba(255,255,255,.28);left:50%;}
+  .track .mark{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%);box-shadow:0 0 0 4px var(--accent-dim);transition:left .08s linear;}
+
+  .faces{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0;}
+  .face-card{background:var(--panel-2);border:1px solid var(--border);border-radius:11px;padding:10px 6px 8px;text-align:center;color:var(--muted);transition:border-color .15s,background .15s,color .15s;}
+  .face-card svg{width:46px;height:46px;display:block;margin:0 auto 5px;}
+  .face-card .name{font-size:12.5px;font-weight:600;}
+  .face-card .gest{font-size:11px;color:var(--muted);margin-top:2px;}
+  .face-card.active{color:var(--accent);border-color:var(--accent);background:var(--accent-dim);}
+  .face-card.active .gest{color:var(--accent);}
+
+  .opts{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:8px 0 12px;}
+  .opts label{display:flex;align-items:center;gap:7px;cursor:pointer;}
+  .opts input{accent-color:var(--accent);width:15px;height:15px;}
+
+  .tips{margin:10px 0 0;padding-left:20px;color:var(--muted);font-size:12.5px;}
+  .tips li{margin:4px 0;}
+  .tips code{font-family:var(--mono);background:var(--panel-2);padding:1px 6px;border-radius:5px;font-size:11.5px;color:var(--text);}
+  .err{color:var(--warn);font-size:12.5px;margin-top:9px;min-height:18px;}
+  h2{font-size:14px;margin:2px 0 10px;font-weight:600;letter-spacing:.3px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>控制台
+      <small>MediaPipe 手势识别 · Web Bluetooth · ESP32-WROOM-32 · v2（多线路加载）</small>
+    </h1>
+    <span class="pill" id="blePill"><span class="dot"></span><span id="bleState">蓝牙未连接</span></span>
+  </header>
+
+  <div class="grid">
+    <!-- 左侧：摄像头 -->
+    <section class="card">
+      <div class="video-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="hud" id="hud">摄像头未开启</div>
+      </div>
+      <div class="btn-row">
+        <button id="btnCam" class="primary">打开摄像头</button>
+        <button id="btnBle" disabled>连接机器人</button>
+      </div>
+      <div class="err" id="errMsg"></div>
+    </section>
+
+    <!-- 右侧：状态与控制 -->
+    <section class="card">
+      <h2>实时状态</h2>
+      <div class="row"><span class="k">手势识别</span><span class="v muted" id="handState">—</span></div>
+      <div class="row"><span class="k">识别结果</span><span class="v muted" id="gestureState">—</span></div>
+      <div class="row"><span class="k">指令下发</span><span class="v muted" id="sendState">—</span></div>
+
+      <div class="gauge">
+        <div class="lab"><span>左右旋转 Pan</span><b id="panVal">90°</b></div>
+        <div class="track"><span class="tick"></span><span class="mark" id="panMark"></span></div>
+      </div>
+      <div class="gauge">
+        <div class="lab"><span>抬头低头 Tilt</span><b id="tiltVal">90°</b></div>
+        <div class="track"><span class="tick"></span><span class="mark" id="tiltMark"></span></div>
+      </div>
+
+      <h2>表情映射</h2>
+      <div class="faces">
+        <div class="face-card" id="face1">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <circle cx="32" cy="32" r="25"/>
+            <circle cx="23" cy="26" r="3" fill="currentColor" stroke="none"/>
+            <circle cx="41" cy="26" r="3" fill="currentColor" stroke="none"/>
+            <path d="M22 37 Q32 48 42 37"/>
+          </svg>
+          <div class="name">笑脸</div><div class="gest">五指张开</div>
+        </div>
+        <div class="face-card" id="face2">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <circle cx="32" cy="32" r="25"/>
+            <circle cx="23" cy="26" r="3"/>
+            <circle cx="41" cy="26" r="3"/>
+            <path d="M22 40 Q32 30 42 40"/>
+            <path d="M19 29 v8 M45 29 v8" stroke-width="2"/>
+          </svg>
+          <div class="name">哭脸</div><div class="gest">五指捏合</div>
+        </div>
+        <div class="face-card" id="face3">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <circle cx="32" cy="32" r="25"/>
+            <path d="M17 23 L26 27 M47 23 L38 27"/>
+            <circle cx="23" cy="32" r="2.5" fill="currentColor" stroke="none"/>
+            <circle cx="41" cy="32" r="2.5" fill="currentColor" stroke="none"/>
+            <path d="M24 42 L29 39 L34 42 L39 39 L44 42" stroke-width="2"/>
+          </svg>
+          <div class="name">委屈</div><div class="gest">握拳</div>
+        </div>
+      </div>
+
+      <div class="opts">
+        <label><input type="checkbox" id="flipPan">左右方向反转</label>
+        <label><input type="checkbox" id="flipTilt">上下方向反转</label>
+      </div>
+
+      <!-- 使用步骤（按要求注释，需要时取消注释即可）
+      <h2>使用步骤</h2>
+      <ol class="tips">
+        <li>先烧录固件，OLED 出现 <code>Waiting BLE</code> 表情</li>
+        <li>本页面通过 <code>localhost</code> 或 https 打开（Chrome）</li>
+        <li>依次点击「打开摄像头」「连接机器人」，选择 GestureRobot</li>
+        <li>手距摄像头约 30–60cm，用手掌位置控制头部朝向</li>
+      </ol>
+      -->
+
+    </section>
+  </div>
+</div>
+<!-- MediaPipe Hands（Google 开源手势识别）脚本在点击打开摄像头时动态加载，多 CDN 自动切换 -->
+<script>
+(function () {
+  'use strict';
+
+  // ---------- 常量（与固件保持一致） ----------
+  var SERVICE_UUID = '6e8a5d02-1a2b-4c3d-9e0f-111122223333';
+  var CHAR_UUID    = '6e8a5d03-1a2b-4c3d-9e0f-111122223333';
+
+  var PAN_MIN = 30, PAN_MAX = 150, PAN_CENTER = 90;
+  var TILT_MIN = 60, TILT_MAX = 120, TILT_CENTER = 90;
+  var HAND_LOST_MS = 600;     // 手消失多久后回正
+  var SEND_INTERVAL_MS = 60;  // 蓝牙指令下发周期
+  var GESTURE_WIN = 7;        // 手势稳定窗口（帧）
+
+  var GESTURE_NAMES = { 0: '待机', 1: '笑脸 · 五指张开', 2: '哭脸 · 五指捏合', 3: '委屈 · 握拳' };
+
+  // ---------- DOM ----------
+  var video = document.getElementById('video');
+  var canvas = document.getElementById('overlay');
+  var ctx = canvas.getContext('2d');
+  var btnCam = document.getElementById('btnCam');
+  var btnBle = document.getElementById('btnBle');
+  var hud = document.getElementById('hud');
+  var errMsg = document.getElementById('errMsg');
+  var blePill = document.getElementById('blePill');
+  var bleState = document.getElementById('bleState');
+  var handState = document.getElementById('handState');
+  var gestureState = document.getElementById('gestureState');
+  var sendState = document.getElementById('sendState');
+  var panVal = document.getElementById('panVal');
+  var tiltVal = document.getElementById('tiltVal');
+  var panMark = document.getElementById('panMark');
+  var tiltMark = document.getElementById('tiltMark');
+  var flipPan = document.getElementById('flipPan');
+  var flipTilt = document.getElementById('flipTilt');
+  var faceCards = { 1: document.getElementById('face1'), 2: document.getElementById('face2'), 3: document.getElementById('face3') };
+
+  // ---------- 运行状态 ----------
+  var hands = null;
+  var modelReady = false;
+  var cameraOn = false;
+  var processing = false;
+  var btDevice = null, btServer = null, btChar = null;
+  var connected = false;
+  var smoothPan = PAN_CENTER, smoothTilt = TILT_CENTER;
+  var gestureHistory = [];
+  var lastHandSeen = 0;
+  var stableGesture = 0;
+  var shownGesture = -1;
+  var sendCount = 0;
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function pad3(n) { return (n < 0 ? 0 : n).toString().padStart(3, '0'); }
+  function showError(msg) { errMsg.textContent = msg || ''; }
+
+  // ---------- 手势识别 ----------
+  // 基于 21 个手部关键点：
+  //  0=手腕 4=拇指尖 8=食指尖 12=中指尖 16=无名指尖 20=小指尖
+  //  6/10/14/18=对应手指的 PIP 关节，9=中指根部（手掌中心近似）
+  function d2(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  function classifyGesture(lm) {
+    // 四指是否伸直：指尖到手腕的距离 明显大于 PIP 关节到手腕的距离
+    var tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+    var extendedCount = 0;
+    for (var i = 0; i < 4; i++) {
+      if (d2(lm[tips[i]], lm[0]) > d2(lm[pips[i]], lm[0]) * 1.08) extendedCount++;
+    }
+    // 拇指尖与食指尖的距离（除以手掌尺寸做归一化）
+    var handScale = d2(lm[0], lm[9]);
+    var pinch = handScale > 0 ? d2(lm[4], lm[8]) / handScale : 9;
+
+    if (extendedCount >= 4 && pinch > 0.55) return 1; // 五指张开 → 笑脸
+    if (pinch < 0.45 && extendedCount < 4) return 2;  // 五指捏合 → 哭脸
+    if (extendedCount <= 1 && pinch > 0.55) return 3; // 握拳     → 委屈
+    return 0;                                          // 其它/过渡 → 待机
+  }
+
+  function pushGesture(g) {
+    gestureHistory.push(g);
+    if (gestureHistory.length > GESTURE_WIN) gestureHistory.shift();
+    var votes = {};
+    for (var i = 0; i < gestureHistory.length; i++) {
+      votes[gestureHistory[i]] = (votes[gestureHistory[i]] || 0) + 1;
+    }
+    var best = 0, bestN = 0;
+    for (var k in votes) { if (votes[k] > bestN) { bestN = votes[k]; best = parseInt(k, 10); } }
+    stableGesture = best;
+  }
+
+  function onResults(results) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var lm = null;
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      lm = results.multiHandLandmarks[0];
+      drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#ff725c', lineWidth: 3 });
+      drawLandmarks(ctx, lm, { color: '#ffffff', fillColor: '#ff725c', lineWidth: 1, radius: 3 });
+      lastHandSeen = performance.now();
+    }
+
+    pushGesture(lm ? classifyGesture(lm) : 0);
+    var handLost = performance.now() - lastHandSeen > HAND_LOST_MS;
+
+    if (lm) {
+      // 手掌中心（中指根关节）位置；预览做了镜像，所以 x 要翻转
+      var mx = 1 - lm[9].x;
+      var my = lm[9].y;
+      var panTarget = PAN_CENTER + (mx - 0.5) * 110 * (flipPan.checked ? -1 : 1);
+      var tiltTarget = TILT_CENTER + (0.5 - my) * 90 * (flipTilt.checked ? -1 : 1);
+      panTarget = clamp(panTarget, PAN_MIN, PAN_MAX);
+      tiltTarget = clamp(tiltTarget, TILT_MIN, TILT_MAX);
+      smoothPan += (panTarget - smoothPan) * 0.28;
+      smoothTilt += (tiltTarget - smoothTilt) * 0.28;
+      handState.textContent = '跟踪中';
+      handState.className = 'v ok';
+    } else if (handLost) {
+      // 手离开画面后缓慢回正
+      smoothPan += (PAN_CENTER - smoothPan) * 0.1;
+      smoothTilt += (TILT_CENTER - smoothTilt) * 0.1;
+      handState.textContent = '未检测到手';
+      handState.className = 'v warn';
+    }
+
+    var effectiveEmotion = handLost ? 0 : stableGesture;
+    gestureState.textContent = GESTURE_NAMES[effectiveEmotion];
+    gestureState.className = 'v ' + (effectiveEmotion ? 'ok' : 'muted');
+    hud.innerHTML = lm ? '手势：<span class="g">' + GESTURE_NAMES[effectiveEmotion] + '</span>'
+                       : '请把手放入画面';
+
+    if (shownGesture !== effectiveEmotion) {
+      Object.keys(faceCards).forEach(function (id) {
+        faceCards[id].classList.toggle('active', parseInt(id, 10) === effectiveEmotion);
+      });
+      shownGesture = effectiveEmotion;
+    }
+    updateGauges();
+  }
+
+  function updateGauges() {
+    var p = Math.round(smoothPan), t = Math.round(smoothTilt);
+    panVal.textContent = p + '°';
+    tiltVal.textContent = t + '°';
+    panMark.style.left = ((p - PAN_MIN) / (PAN_MAX - PAN_MIN) * 100) + '%';
+    tiltMark.style.left = ((t - TILT_MIN) / (TILT_MAX - TILT_MIN) * 100) + '%';
+  }
+
+  // ---------- 模型加载（多 CDN 自动切换） ----------
+  var CDN_HOSTS = [
+    'https://fastly.jsdelivr.net/npm', // 国内相对稳定的 Fastly 镜像
+    'https://cdn.jsdelivr.net/npm',    // jsdelivr 官方
+    'https://unpkg.com/npm'            // unpkg 备用
+  ];
+  var HANDS_PKG = '@mediapipe/hands@0.4.1675469240';
+  var DRAW_PKG  = '@mediapipe/drawing_utils@0.3.1675466124';
+
+  function loadScript(src, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        reject(new Error('timeout'));
+      }, timeoutMs);
+      s.onload = function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      s.onerror = function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(new Error('network'));
+      };
+      document.head.appendChild(s);
+    });
+  }
+
+  async function loadMediaPipeScripts() {
+    if (window.Hands && window.drawConnectors) return;
+    for (var i = 0; i < CDN_HOSTS.length; i++) {
+      try {
+        hud.textContent = '正在下载手势脚本（线路 ' + (i + 1) + '/' + CDN_HOSTS.length + '）…';
+        if (!window.Hands) {
+          await loadScript(CDN_HOSTS[i] + '/' + HANDS_PKG + '/hands.js', 15000);
+        }
+        if (!window.Hands) throw new Error('hands 未定义');
+        if (!window.drawConnectors) {
+          await loadScript(CDN_HOSTS[i] + '/' + DRAW_PKG + '/drawing_utils.js', 15000);
+        }
+        if (!window.drawConnectors) throw new Error('drawing_utils 未定义');
+        return;
+      } catch (e) {
+        // 当前线路失败，切换下一条 CDN
+      }
+    }
+    throw new Error('手势脚本下载失败：三条 CDN 线路均不可用，请检查网络或开启代理后重试');
+  }
+
+  function sendWithTimeout(h, ms) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        reject(new Error('模型加载超时'));
+      }, ms);
+      h.send({ image: video }).then(function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      }).catch(function (err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+
+  async function ensureModel() {
+    if (modelReady) return;
+    await loadMediaPipeScripts();
+    for (var i = 0; i < CDN_HOSTS.length; i++) {
+      var base = CDN_HOSTS[i] + '/' + HANDS_PKG + '/';
+      try {
+        hud.textContent = '正在下载手势模型（线路 ' + (i + 1) + '/' + CDN_HOSTS.length +
+                          '，首次约 7MB，请稍候）…';
+        hands = new Hands({ locateFile: function (f) { return base + f; } });
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.5
+        });
+        hands.onResults(onResults);
+        await sendWithTimeout(hands, 25000); // 首帧推理会触发模型下载
+        modelReady = true;
+        return;
+      } catch (e) {
+        // 该线路模型下载超时/失败，重建对象后切换下一条
+      }
+    }
+    throw new Error('手势模型加载失败：所有 CDN 均超时，请检查网络或开启代理后重试');
+  }
+
+  // ---------- 摄像头循环 ----------
+  async function processFrame() {
+    if (!cameraOn || !modelReady) return;
+    if (!processing && video.readyState >= 2) {
+      processing = true;
+      try { await hands.send({ image: video }); }
+      catch (e) { /* 单帧失败忽略，等下一帧 */ }
+      processing = false;
+    }
+    requestAnimationFrame(processFrame);
+  }
+
+  async function toggleCamera() {
+    if (cameraOn) {
+      cameraOn = false;
+      var s = video.srcObject;
+      if (s) { s.getTracks().forEach(function (t) { t.stop(); }); }
+      video.srcObject = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      btnCam.textContent = '打开摄像头';
+      btnCam.classList.add('primary');
+      hud.textContent = '摄像头未开启';
+      handState.textContent = '—'; handState.className = 'v muted';
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showError('无法访问摄像头：请用 Chrome 并通过 localhost 或 https 打开本页面。');
+      return;
+    }
+    try {
+      var stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      cameraOn = true;
+      lastHandSeen = 0;
+      btnCam.textContent = '关闭摄像头';
+      btnCam.classList.remove('primary');
+      btnCam.disabled = true;
+      showError('');
+      try {
+        await ensureModel();
+        hud.textContent = '请把手放入画面';
+        processFrame();
+      } catch (e) {
+        showError(e.message);
+        hud.textContent = '模型加载失败，请检查网络后关闭再打开摄像头';
+      }
+      btnCam.disabled = false;
+    } catch (e) {
+      showError('摄像头打开失败：' + e.message + '（请确认已允许摄像头权限）');
+    }
+  }
+
+  // ---------- 蓝牙 ----------
+  function setBleUI(ok, text) {
+    connected = ok;
+    bleState.textContent = text;
+    blePill.classList.toggle('ok', ok);
+    btnBle.textContent = ok ? '断开机器人' : '连接机器人';
+    btnBle.classList.toggle('connected', ok);
+    if (!ok) { sendState.textContent = '—'; sendState.className = 'v muted'; }
+  }
+
+  async function toggleBle() {
+    if (connected) {
+      if (btServer) { try { btServer.disconnect(); } catch (e) {} }
+      return;
+    }
+    if (!navigator.bluetooth) {
+      showError('当前浏览器不支持 Web Bluetooth，请使用桌面版 Chrome（Edge 同样可）并通过 localhost 或 https 打开。');
+      return;
+    }
+    try {
+      setBleUI(false, '正在搜索设备…');
+      btDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }]
+      });
+      btDevice.addEventListener('gattserverdisconnected', function () {
+        setBleUI(false, '蓝牙未连接');
+        showError('');
+      });
+      btServer = await btDevice.gatt.connect();
+      var service = await btServer.getPrimaryService(SERVICE_UUID);
+      btChar = await service.getCharacteristic(CHAR_UUID);
+      setBleUI(true, '已连接 GestureRobot');
+      showError('');
+    } catch (e) {
+      setBleUI(false, '蓝牙未连接');
+      if (e && e.name !== 'NotFoundError') {
+        showError('蓝牙连接失败：' + e.message);
+      }
+    }
+  }
+
+  // ---------- 周期下发指令 ----------
+  setInterval(function () {
+    if (!connected || !btChar) return;
+    var handLost = performance.now() - lastHandSeen > HAND_LOST_MS;
+    var emotion = handLost ? 0 : stableGesture;
+    var cmd = 'P' + pad3(Math.round(smoothPan)) +
+              'T' + pad3(Math.round(smoothTilt)) +
+              'E' + emotion + '\n';
+    btChar.writeValueWithoutResponse(new TextEncoder().encode(cmd)).then(function () {
+      sendCount++;
+      sendState.textContent = '已下发 ' + sendCount + ' 条';
+      sendState.className = 'v ok';
+    }).catch(function () {});
+  }, SEND_INTERVAL_MS);
+
+  // ---------- 初始化（模型在点击打开摄像头时才加载） ----------
+  btnBle.disabled = false;
+  btnCam.addEventListener('click', toggleCamera);
+  btnBle.addEventListener('click', toggleBle);
+  updateGauges();
+})();
+</script>
+</body>
+</html>
